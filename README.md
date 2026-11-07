@@ -1,108 +1,127 @@
-# Flowery: Automated E-Commerce & Delivery Platform 🌸
+# Automated E-Commerce Deployment Platform 🌸
 
-A luxury floral e-commerce and delivery logistics web application built with **React 19**, **TypeScript**, and **Tailwind CSS**, designed in accordance with the **Flowery Figma Mobile App** specifications and integrated with backend microservices via Docker.
-
----
-
-## 🌟 Highlights & Features
-
-- **🌸 Flowery Boutique Experience**:
-  - Figma-perfect luxury floral branding with custom typography (`IM Fell English` & `Inter`).
-  - Signature Flowery color palette (`#D21E6A`, `#F9ECF0`, `#F9F9F9`, `#0C1015`, `#535353`).
-  - Interactive hero banners, category carousels with ready vector icons, and curated bestseller showcases.
-  - Multi-category filtering, real-time search, price ranges, and sorting.
-
-- **🛍️ Complete Customer Journey**:
-  - Detailed product view with high-res imagery, flower care guides, and stock availability.
-  - Seamless cart drawer & checkout process with address selection and payment methods.
-  - Live order tracking with visual progress steps (`Pending` ➔ `Confirmed` ➔ `Assigned` ➔ `Out for Delivery` ➔ `Delivered`).
-  - User profiles with saved addresses, preferences, and order history.
-
-- **🛵 Flowery Rider (Driver App)**:
-  - Driver onboarding, vehicle registration, and status toggle (Active / Inactive).
-  - Nearby orders feed with one-click claim & accept actions.
-  - Step-by-step delivery updates (`Pick Up Package`, `Mark as Delivered`) directly syncing with customer tracking.
-
-- **📊 Admin Studio**:
-  - Centralized operations dashboard for order management and fulfillment status oversight.
-  - Catalog inventory controls: Create, update, and manage luxury floral arrangements.
-
-- **🔄 Multi-Role App Mode Switch**:
-  - Clean top navigation switcher allowing seamless toggling between Customer Boutique, Driver App, and Admin Studio.
+An enterprise full-stack floral e-commerce and delivery logistics platform built with a **.NET Microservices Architecture** and a **React 19 / TypeScript** luxury frontend designed after the **Flowery Figma Mobile App**.
 
 ---
 
-## 🛠️ Tech Stack
+## 🏗️ Repository Architecture
 
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons
-- **Backend Services**: .NET / Kestrel Microservices running via Docker Compose on port `5000`
-- **State & Networking**: REST API client with automatic gateway fallback & caching (`src/services/api.ts`)
-- **Linting & Quality**: Oxlint, TypeScript strict mode
+This repository is organized as a unified monorepo containing both the backend microservices and frontend client:
+
+```
+├── backend/                        # .NET Microservices & Distributed Infrastructure
+│   ├── src/
+│   │   ├── ApiGateway/             # Central reverse proxy & rate limiter (YARP / Kestrel)
+│   │   ├── Services/
+│   │   │   ├── IdentityService/    # Authentication, JWT, roles, OTP, user profiles
+│   │   │   ├── CatalogService/     # Products, categories, floral inventory
+│   │   │   ├── AddressCartService/ # Shopping carts, saved addresses, coverage areas
+│   │   │   ├── OrdersService/      # Order fulfillment, tracking & status pipeline
+│   │   │   └── PaymentService/     # Stripe checkout sessions & payment webhooks
+│   │   └── Shared/                 # Common contracts, events, redis caching & security
+│   ├── tests/                      # Unit & integration test suites
+│   ├── docker-compose.yml          # Backend infrastructure orchestration
+│   └── .env.example                # Environment variables template
+│
+├── frontend/                       # React 19 Luxury Floral Client
+│   ├── src/
+│   │   ├── pages/                  # Storefront, Catalog, Cart, Tracking, Driver & Admin
+│   │   ├── components/             # Reusable UI components & navigation
+│   │   ├── context/                # Auth, Cart, and Toast providers
+│   │   └── services/               # REST API client with Gateway integration
+│   ├── Dockerfile                  # Multi-stage production container build
+│   ├── nginx.conf                  # Production SPA reverse proxy
+│   └── package.json                # Dependencies & scripts
+│
+├── docker-compose.yml              # Unified full-stack docker compose orchestration
+├── package.json                    # Root workspace runner scripts
+└── README.md
+```
 
 ---
 
-## 🚀 Getting Started
+## 🌟 Key Features
+
+### 🛍️ Flowery Customer Boutique
+- **Luxury Floral Branding**: Faithfully styled from the Flowery Figma design (`#D21E6A`, `#F9ECF0`, `IM Fell English`, `Inter`).
+- **Catalog & Discovery**: Vector-based category carousels, instant search, price filters, and bestsellers.
+- **Cart & Checkout**: Multi-step checkout with address selection and payment integration.
+- **Real-Time Order Tracking**: Visual progression tracker (`Pending` ➔ `Confirmed` ➔ `Assigned` ➔ `Out for Delivery` ➔ `Delivered`).
+
+### 🛵 Flowery Rider (Delivery Portal)
+- Onboarding, vehicle info, and driver status toggles.
+- Nearby unassigned orders queue with claim & step-by-step delivery confirmations.
+
+### 📊 Admin Studio
+- Operational dashboard for monitoring live orders and managing catalog offerings.
+
+### ⚙️ Backend Services & Infrastructure
+- **Microservices**: Independent .NET services for Identity, Catalog, Cart, Orders, and Payments.
+- **Event-Driven Messaging**: Asynchronous integration events across services via RabbitMQ & MassTransit.
+- **High Performance Caching**: Redis caching for catalog data and shopping carts.
+- **Relational Storage**: SQL Server databases per service following Database-per-Service pattern.
+
+---
+
+## 🚀 Quick Start Guide
 
 ### 1. Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or newer)
-- [Docker & Docker Compose](https://www.docker.com/) (to run backend microservices)
-
-### 2. Backend Services
-Start the backend microservices using Docker Compose from your backend directory:
-```bash
-docker compose up -d
-```
-The API Gateway will be listening at `http://localhost:5000`.
-
-### 3. Frontend Setup
-Clone the repository and install dependencies:
-```bash
-git clone https://github.com/MohamedEl-hussainey29/Automated-E-Commerce-Deployment-Platform.git
-cd Automated-E-Commerce-Deployment-Platform
-
-npm install
-```
-
-### 4. Run Development Server
-```bash
-npm run dev
-```
-The app will start at `http://localhost:5173`. Vite proxies `/api` requests directly to `http://localhost:5000`.
-
-### 5. Production Build
-```bash
-npm run build
-```
-Generates production assets in the `dist` directory with full TypeScript type checks.
+- [Docker & Docker Desktop](https://www.docker.com/)
+- [Node.js](https://nodejs.org/) (v18+)
+- [.NET 8/9 SDK](https://dotnet.microsoft.com/) (for standalone backend dev)
 
 ---
 
-## 📁 Project Structure
+### Option A: Run Full-Stack via Docker (Recommended)
 
-```
-├── public/                 # Static assets & brand media
-├── src/
-│   ├── assets/             # Brand icons & illustrations
-│   ├── components/         # Reusable UI components (Navbar, Footer, Modals, Cards)
-│   ├── pages/              # Application pages:
-│   │   ├── HomePage.tsx            # Curated storefront & hero banners
-│   │   ├── CatalogPage.tsx         # Filterable floral catalog
-│   │   ├── ProductDetailsPage.tsx  # Product specs & care advice
-│   │   ├── CartCheckoutPage.tsx    # Cart & order placement
-│   │   ├── OrdersPage.tsx          # Real-time tracking & order history
-│   │   ├── ProfilePage.tsx         # Account management & saved addresses
-│   │   ├── AuthPage.tsx            # Sign in & registration
-│   │   ├── DriverPortalPage.tsx    # Rider delivery dashboard
-│   │   └── AdminDashboardPage.tsx  # Operations & inventory management
-│   ├── services/           # API client & backend integrations
-│   ├── types/              # Domain models & TypeScript interfaces
-│   ├── App.tsx             # Root component & view router
-│   └── main.tsx            # Application entry point
-├── package.json
-└── vite.config.ts
-```
+1. **Configure Environment**:
+   ```bash
+   cp backend/.env.example backend/.env
+   # Adjust any secrets/keys inside backend/.env if needed
+   ```
+
+2. **Start All Services**:
+   ```bash
+   docker compose up -d --build
+   ```
+
+- Frontend App: `http://localhost:5173`
+- API Gateway: `http://localhost:5000`
+- SQL Server: `localhost:1433`
+- Redis: `localhost:6379`
+- RabbitMQ: `localhost:5672` (Management: `localhost:15672`)
 
 ---
 
-## 🤝 Collaboration & Contributors
-Developed by [Ahmed Osama](https://github.com/AhmedUsama29) in collaboration with [Mohamed El-hussainey](https://github.com/MohamedEl-hussainey29).
+### Option B: Local Development
+
+1. **Start Backend Infrastructure**:
+   ```bash
+   cd backend
+   docker compose up -d
+   ```
+
+2. **Run Frontend**:
+   From the repository root:
+   ```bash
+   npm install --prefix frontend
+   npm run dev
+   ```
+   Or directly inside `frontend`:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   The frontend runs on `http://localhost:5173` with automatic API proxying to `http://localhost:5000`.
+
+3. **Build Frontend**:
+   ```bash
+   npm run build
+   ```
+
+---
+
+## 🤝 Authors & Credits
+- **Ahmed Osama** ([@AhmedUsama29](https://github.com/AhmedUsama29))
+- **Mohamed El-hussainey** ([@MohamedEl-hussainey29](https://github.com/MohamedEl-hussainey29))
