@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import type { AuthUserDto } from '../types/api';
+import type { AuthUserDto, AddressDto } from '../types/api';
 
 interface AuthContextValue {
   user: AuthUserDto | null;
@@ -10,6 +10,15 @@ interface AuthContextValue {
   isCustomer: boolean;
   selectedStoreId: string | null;
   setSelectedStoreId: (storeId: string | null) => void;
+  selectedAddress: AddressDto | null;
+  setSelectedAddress: (addr: AddressDto | null) => void;
+  userAddresses: AddressDto[];
+  refreshAddresses: () => Promise<AddressDto[]>;
+  selectAddress: (addr: AddressDto | null) => Promise<void>;
+  isAddressModalOpen: boolean;
+  setIsAddressModalOpen: (open: boolean) => void;
+  openAddressModal: () => void;
+  closeAddressModal: () => void;
   gatewayOnline: boolean | null;
   checkGatewayHealth: () => Promise<void>;
   setSession: (user: AuthUserDto, accessToken: string, refreshToken?: string | null) => void;
@@ -36,7 +45,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem('flora_selected_store') || null;
   });
 
+  const [selectedAddress, setSelectedAddressState] = useState<AddressDto | null>(() => {
+    const saved = localStorage.getItem('flora_selected_address');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [userAddresses, setUserAddresses] = useState<AddressDto[]>([]);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [gatewayOnline, setGatewayOnline] = useState<boolean | null>(null);
+
+  const openAddressModal = () => setIsAddressModalOpen(true);
+  const closeAddressModal = () => setIsAddressModalOpen(false);
 
   const setSelectedStoreId = (storeId: string | null) => {
     setSelectedStoreIdState(storeId);
@@ -46,6 +72,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('flora_selected_store');
     }
   };
+
+  const setSelectedAddress = (addr: AddressDto | null) => {
+    setSelectedAddressState(addr);
+    if (addr) {
+      localStorage.setItem('flora_selected_address', JSON.stringify(addr));
+    } else {
+      localStorage.removeItem('flora_selected_address');
+    }
+  };
+
+  const selectAddress = async (addr: AddressDto | null) => {
+    setSelectedAddress(addr);
+    if (!addr) {
+      setSelectedStoreId(null);
+      return;
+    }
+    if (addr.storeId) {
+      setSelectedStoreId(addr.storeId);
+      return;
+    }
+    try {
+      const res = await api.resolveStore({ addressId: addr.id });
+      if (res.data?.isServiceable && res.data.storeId) {
+        setSelectedStoreId(res.data.storeId);
+      }
+    } catch {
+      // Keep store or fallback
+    }
+  };
+
+  const refreshAddresses = useCallback(async (): Promise<AddressDto[]> => {
+    if (!api.getToken()) {
+      setUserAddresses([]);
+      return [];
+    }
+    try {
+      const res = await api.getAddresses();
+      const list = res.data || [];
+      setUserAddresses(list);
+
+      setSelectedAddressState((prev) => {
+        if (prev) {
+          const match = list.find((a: AddressDto) => a.id === prev.id);
+          if (match) {
+            localStorage.setItem('flora_selected_address', JSON.stringify(match));
+            return match;
+          }
+        }
+        const defaultOne = list.find((a: AddressDto) => a.isDefault) || list[0] || null;
+        if (defaultOne) {
+          localStorage.setItem('flora_selected_address', JSON.stringify(defaultOne));
+        } else {
+          localStorage.removeItem('flora_selected_address');
+        }
+        return defaultOne;
+      });
+
+      return list;
+    } catch {
+      return [];
+    }
+  }, []);
 
   const checkGatewayHealth = async () => {
     try {
@@ -61,6 +149,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     checkGatewayHealth();
   }, []);
+
+  const roles = (user?.roles || []).map((r) => r.toUpperCase());
+  const isAdmin = roles.includes('ADMIN');
+  const isDriver = roles.includes('DRIVER');
+  const isCustomer = roles.includes('CUSTOMER');
+
+  useEffect(() => {
+    if (user && isCustomer) {
+      refreshAddresses();
+    } else {
+      setUserAddresses([]);
+    }
+  }, [user, isCustomer, refreshAddresses]);
 
   const setSession = (u: AuthUserDto, accessToken: string, refreshToken?: string | null) => {
     api.setTokens(accessToken, refreshToken);
@@ -78,13 +179,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     api.clearTokens();
+    setSelectedAddress(null);
+    setUserAddresses([]);
     setUser(null);
   };
-
-  const roles = (user?.roles || []).map((r) => r.toUpperCase());
-  const isAdmin = roles.includes('ADMIN');
-  const isDriver = roles.includes('DRIVER');
-  const isCustomer = roles.includes('CUSTOMER');
 
   return (
     <AuthContext.Provider
@@ -96,6 +194,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isCustomer,
         selectedStoreId,
         setSelectedStoreId,
+        selectedAddress,
+        setSelectedAddress,
+        userAddresses,
+        refreshAddresses,
+        selectAddress,
+        isAddressModalOpen,
+        setIsAddressModalOpen,
+        openAddressModal,
+        closeAddressModal,
         gatewayOnline,
         checkGatewayHealth,
         setSession,

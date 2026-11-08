@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   MapPin,
   LogOut,
-  Check,
   X,
   ChevronDown,
   Home as HomeIcon,
@@ -19,8 +18,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
-import { api } from '../services/api';
-import type { AddressDto } from '../types/api';
+import { DeliveryModal } from './DeliveryModal';
 
 interface AppNotification {
   id: string;
@@ -67,17 +65,14 @@ export const Navbar: React.FC = () => {
   const {
     user,
     isAuthenticated,
-    isCustomer,
-    selectedStoreId,
-    setSelectedStoreId,
+    selectedAddress,
+    userAddresses,
+    openAddressModal,
     logout,
   } = useAuth();
   const { cart } = useCart();
   const { toast } = useToast();
 
-  const [storeModalOpen, setStoreModalOpen] = useState(false);
-  const [userAddresses, setUserAddresses] = useState<AddressDto[]>([]);
-  const [resolvingStore, setResolvingStore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
@@ -93,15 +88,6 @@ export const Navbar: React.FC = () => {
     );
   };
 
-  useEffect(() => {
-    if (isAuthenticated && isCustomer) {
-      api
-        .getAddresses()
-        .then((res) => setUserAddresses(res.data || []))
-        .catch(() => setUserAddresses([]));
-    }
-  }, [storeModalOpen, isAuthenticated, isCustomer]);
-
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -111,28 +97,14 @@ export const Navbar: React.FC = () => {
     }
   };
 
-  const handleResolveByAddress = async (addressId: string) => {
-    setResolvingStore(true);
-    try {
-      const res = await api.resolveStore({ addressId });
-      if (res.data?.isServiceable && res.data.storeId) {
-        setSelectedStoreId(res.data.storeId);
-        toast('Location Updated', 'Showing flowers available for your address');
-        setStoreModalOpen(false);
-      } else {
-        toast('Address Outside Coverage', 'This address is not covered by an active store.', 'info');
-      }
-    } catch (err: any) {
-      toast('Location Update Failed', err.message, 'error');
-    } finally {
-      setResolvingStore(false);
-    }
-  };
-
-  const defaultAddr = userAddresses.find((a) => a.isDefault) || userAddresses[0];
-  const deliveryLabel = defaultAddr
-    ? `${defaultAddr.addressLine} - ${defaultAddr.area || defaultAddr.cityName}`
-    : '2XVP+XC - Sheikh Zayed';
+  const activeAddr = selectedAddress || userAddresses.find((a) => a.isDefault) || userAddresses[0];
+  const deliveryLabel = activeAddr
+    ? `${activeAddr.addressLine} - ${activeAddr.area || activeAddr.cityName}`
+    : isAuthenticated
+    ? (userAddresses.length > 0
+        ? `${userAddresses[0].addressLine} - ${userAddresses[0].area || userAddresses[0].cityName}`
+        : 'Add delivery address')
+    : 'Cairo, Egypt (Select location)';
 
   return (
     <>
@@ -194,8 +166,8 @@ export const Navbar: React.FC = () => {
               </Link>
 
               <button
-                onClick={() => setStoreModalOpen(true)}
-                className="hidden xl:flex items-center gap-2 text-sm text-[#35383C] hover:text-[#D21E6A] transition-colors"
+                onClick={openAddressModal}
+                className="hidden xl:flex items-center gap-2 text-sm text-[#35383C] hover:text-[#D21E6A] transition-colors cursor-pointer"
               >
                 <MapPin className="w-4 h-4 text-[#D21E6A] shrink-0" />
                 <span className="font-medium text-[#35383C]">Deliver to</span>
@@ -462,73 +434,7 @@ export const Navbar: React.FC = () => {
       </nav>
 
       {/* Delivery Location Modal */}
-      {storeModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0C1015]/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#F9F9F9] rounded-[16px] max-w-md w-full p-6 shadow-2xl border border-[#CFCFCF] space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#CFCFCF]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-[#F9ECF0] text-[#D21E6A] flex items-center justify-center">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-medium text-[#0C1015]">Deliver to</h3>
-              </div>
-              <button
-                onClick={() => setStoreModalOpen(false)}
-                className="p-1.5 rounded-lg text-[#535353] hover:text-[#0C1015]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => {
-                setSelectedStoreId(null);
-                setStoreModalOpen(false);
-              }}
-              className={`w-full flex items-center justify-between p-4 rounded-[10px] shadow-[0px_0px_2px_rgba(83,83,83,0.25)] bg-[#F9F9F9] text-left transition-all border ${
-                !selectedStoreId ? 'border-[#D21E6A]' : 'border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="w-5 h-5 rounded-full border border-[#D21E6A] flex items-center justify-center">
-                  {!selectedStoreId && <span className="w-3 h-3 rounded-full bg-[#D21E6A]" />}
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-[#0C1015]">
-                    2XVP+XC - Sheikh Zayed
-                  </p>
-                  <p className="text-xs text-[#535353]">All available bouquets</p>
-                </div>
-              </div>
-              {!selectedStoreId && <Check className="w-4 h-4 text-[#D21E6A]" />}
-            </button>
-
-            {userAddresses.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-[#535353]">Saved addresses</p>
-                {userAddresses.map((addr) => (
-                  <button
-                    key={addr.id}
-                    onClick={() => handleResolveByAddress(addr.id)}
-                    disabled={resolvingStore}
-                    className="w-full p-3.5 rounded-[10px] bg-[#F9F9F9] shadow-[0px_0px_2px_rgba(83,83,83,0.25)] border border-transparent hover:border-[#D21E6A] text-left flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-[#0C1015]">
-                        {addr.label || addr.recipientName}
-                      </p>
-                      <p className="text-xs text-[#535353]">
-                        {addr.addressLine}, {addr.area}
-                      </p>
-                    </div>
-                    <span className="text-xs font-medium text-[#D21E6A]">Select</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <DeliveryModal />
     </>
   );
 };

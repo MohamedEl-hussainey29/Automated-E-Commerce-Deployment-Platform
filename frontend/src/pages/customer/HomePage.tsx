@@ -56,7 +56,13 @@ const getCategoryReadyIcon = (name: string, index: number): LucideIcon => {
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { selectedStoreId } = useAuth();
+  const {
+    isAuthenticated,
+    selectedStoreId,
+    selectedAddress,
+    userAddresses,
+    openAddressModal,
+  } = useAuth();
   const { addToCart } = useCart();
 
   const [homeSections, setHomeSections] = useState<HomeLayoutSectionDto[]>([]);
@@ -116,18 +122,33 @@ export const HomePage: React.FC = () => {
           { id: 'anniversary', name: 'Anniversary', imageUrl: null },
         ];
 
+  const activeAddr = selectedAddress || userAddresses.find((a) => a.isDefault) || userAddresses[0];
+  const deliveryLabel = activeAddr
+    ? `${activeAddr.addressLine} - ${activeAddr.area || activeAddr.cityName}`
+    : isAuthenticated
+    ? (userAddresses.length > 0
+        ? `${userAddresses[0].addressLine} - ${userAddresses[0].area || userAddresses[0].cityName}`
+        : 'Add your delivery address')
+    : 'Cairo, Egypt (Select location)';
+
   return (
     <div className="bg-[#F9F9F9] min-h-screen pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-8">
         {/* Deliver to location bar */}
-        <div className="flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-[#D21E6A]" />
+        <button
+          onClick={openAddressModal}
+          className="flex items-center gap-2 text-left group hover:opacity-80 transition-all cursor-pointer py-1"
+          aria-label="Change delivery address"
+        >
+          <MapPin className="w-5 h-5 text-[#D21E6A] shrink-0 group-hover:scale-110 transition-transform" />
           <p className="text-[14px] font-medium text-[#35383C]">
             <span>Deliver to </span>
-            <span className="text-[#0C1015]">2XVP+XC - Sheikh Zayed</span>
+            <span className="text-[#0C1015] font-semibold underline decoration-[#D21E6A]/30 group-hover:decoration-[#D21E6A]">
+              {deliveryLabel}
+            </span>
           </p>
-          <ChevronDown className="w-4 h-4 text-[#D21E6A]" />
-        </div>
+          <ChevronDown className="w-4 h-4 text-[#D21E6A] shrink-0 transition-transform group-hover:translate-y-0.5" />
+        </button>
 
         {/* Optional Banner */}
         {bannerSection?.payload?.imageUrl && (
