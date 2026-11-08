@@ -4,6 +4,7 @@ using Shared.Interfaces;
 using IdentityService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using FirebaseAdmin;
 
 namespace IdentityService.Infrastructure.Notifications
@@ -12,13 +13,17 @@ namespace IdentityService.Infrastructure.Notifications
     {
         private readonly ILogger<FcmService> _logger;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly FirebaseMessaging _messaging;
+        private readonly FirebaseMessaging? _messaging;
 
-        public FcmService(ILogger<FcmService> logger, IUnitOfWork unitOfWork, FirebaseApp firebaseApp)
+        public FcmService(ILogger<FcmService> logger, IUnitOfWork unitOfWork, IServiceProvider serviceProvider)
         {
             _logger = logger;
             _unitOfWork = unitOfWork;
-            _messaging = FirebaseMessaging.GetMessaging(firebaseApp);
+            var firebaseApp = serviceProvider.GetService<FirebaseApp>();
+            if (firebaseApp != null)
+            {
+                _messaging = FirebaseMessaging.GetMessaging(firebaseApp);
+            }
         }
 
         public async Task SendSilentDataMessageAsync(
@@ -51,6 +56,11 @@ namespace IdentityService.Infrastructure.Notifications
                 .ToArray();
 
             if (uniqueTokens.Length == 0) return;
+            if (_messaging == null)
+            {
+                _logger.LogInformation("FCM FirebaseApp not configured; skipping push notification.");
+                return;
+            }
 
             var failedTokens = new HashSet<string>(StringComparer.Ordinal);
             foreach (var tokenBatch in uniqueTokens.Chunk(500))

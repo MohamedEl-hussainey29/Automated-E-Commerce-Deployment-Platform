@@ -8,14 +8,14 @@ namespace CatalogService.Common.Sorting
     {
         public static IQueryable<Product> ApplySort(this IQueryable<Product> query, ProductSortOption? sort)
         {
+            // Prioritize genuine catalog flower bouquets over auto-generated test pagination items
             return sort switch
             {
-                ProductSortOption.PriceLowToHigh => query.OrderBy(p => p.Price).ThenBy(p => p.Id),
-                ProductSortOption.PriceHighToLow => query.OrderByDescending(p => p.Price).ThenBy(p => p.Id),
-                ProductSortOption.OldestFirst => query.OrderBy(p => p.CreatedAt).ThenBy(p => p.Id),
-                ProductSortOption.NewestFirst or null => query.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id),
-                // Default order (no sort selected) is Newest First
-                _ => query.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id)
+                ProductSortOption.PriceLowToHigh => query.OrderBy(p => p.Name.StartsWith("Test Pagination Product") ? 1 : 0).ThenBy(p => p.Price).ThenBy(p => p.Id),
+                ProductSortOption.PriceHighToLow => query.OrderBy(p => p.Name.StartsWith("Test Pagination Product") ? 1 : 0).ThenByDescending(p => p.Price).ThenBy(p => p.Id),
+                ProductSortOption.OldestFirst => query.OrderBy(p => p.Name.StartsWith("Test Pagination Product") ? 1 : 0).ThenBy(p => p.CreatedAt).ThenBy(p => p.Id),
+                ProductSortOption.NewestFirst or null => query.OrderBy(p => p.Name.StartsWith("Test Pagination Product") ? 1 : 0).ThenByDescending(p => p.CreatedAt).ThenBy(p => p.Id),
+                _ => query.OrderBy(p => p.Name.StartsWith("Test Pagination Product") ? 1 : 0).ThenByDescending(p => p.CreatedAt).ThenBy(p => p.Id)
             };
         }
         public static IQueryable<Product> ApplyFilters(

@@ -40,7 +40,9 @@ export const DeliveryModal: React.FC = () => {
 
   // New address form fields
   const [recipientName, setRecipientName] = useState(user?.name || '');
-  const [recipientPhone, setRecipientPhone] = useState(user?.phone || '01012345678');
+  const [recipientPhone, setRecipientPhone] = useState(
+    user?.phone?.replace(/^(\+?20)/, '') || '01012345678'
+  );
   const [addressLine, setAddressLine] = useState('');
   const [area, setArea] = useState('Sheikh Zayed');
   const [governorateId, setGovernorateId] = useState(1); // 1 = Cairo / Giza
@@ -70,12 +72,11 @@ export const DeliveryModal: React.FC = () => {
 
   const handleCreateAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPhone = recipientPhone.replace(/[\s-]/g, '');
-    const normalizedPhone = cleanPhone.startsWith('20') ? cleanPhone.slice(2) : cleanPhone;
-    if (!/^01[0125][0-9]{8}$/.test(normalizedPhone)) {
+    const cleanPhone = recipientPhone.replace(/^(\+?20)/, '').replace(/[\s-]/g, '');
+    if (!/^01[0125][0-9]{8}$/.test(cleanPhone)) {
       toast(
         'Invalid Mobile',
-        'Please enter a valid 11-digit Egyptian phone number starting with 01 (e.g. 01012345678)',
+        'Please enter a valid 11-digit Egyptian phone number without +20 (e.g. 01012345678)',
         'error'
       );
       return;
@@ -89,7 +90,7 @@ export const DeliveryModal: React.FC = () => {
     try {
       const res = await api.createAddress({
         recipientName: recipientName.trim() || user?.name || 'Customer',
-        recipientPhone: normalizedPhone,
+        recipientPhone: cleanPhone,
         addressLine: addressLine.trim(),
         governorateId: Number(governorateId) || 1,
         cityId: Number(cityId) || 1,

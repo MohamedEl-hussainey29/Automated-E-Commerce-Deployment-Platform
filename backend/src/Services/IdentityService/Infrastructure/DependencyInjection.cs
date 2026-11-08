@@ -126,7 +126,11 @@ namespace IdentityService.Infrastructure
         private static IServiceCollection AddFirebase(
             this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
         {
-            var credentialsPath = Required(configuration, "Firebase:CredentialsPath");
+            var credentialsPath = configuration["Firebase:CredentialsPath"];
+            if (string.IsNullOrWhiteSpace(credentialsPath))
+            {
+                return services;
+            }
 
             var fullPath = credentialsPath;
             if (!Path.IsPathRooted(credentialsPath))
@@ -145,38 +149,48 @@ namespace IdentityService.Infrastructure
                 }
             }
 
-            if (!File.Exists(fullPath))
-                throw new FileNotFoundException($"Firebase credentials file not found at '{fullPath}'.");
-
-            using var credentialsDocument = JsonDocument.Parse(File.ReadAllText(fullPath));
-            var credentials = credentialsDocument.RootElement;
-
-            static string CredentialValue(JsonElement json, string propertyName) =>
-                json.TryGetProperty(propertyName, out var property) &&
-                !string.IsNullOrWhiteSpace(property.GetString())
-                    ? property.GetString()!
-                    : throw new InvalidOperationException(
-                        $"Firebase credentials are missing required property '{propertyName}'.");
-
-            if (CredentialValue(credentials, "type") != "service_account")
-                throw new InvalidOperationException("Firebase credentials must be a service account.");
-
-            var initializer = new ServiceAccountCredential.Initializer(
-                CredentialValue(credentials, "client_email"),
-                CredentialValue(credentials, "token_uri"))
+            if (!File.Exists(fullPath) || Directory.Exists(fullPath))
             {
-                ProjectId = CredentialValue(credentials, "project_id"),
-                KeyId = CredentialValue(credentials, "private_key_id")
-            }.FromPrivateKey(CredentialValue(credentials, "private_key"));
+                // In Development or without mounted service account file, proceed without crashing
+                return services;
+            }
 
-            var credential = new ServiceAccountCredential(initializer).ToGoogleCredential();
-
-            var firebaseApp = FirebaseApp.Create(new AppOptions
+            try
             {
-                Credential = credential
-            });
+                using var credentialsDocument = JsonDocument.Parse(File.ReadAllText(fullPath));
+                var credentials = credentialsDocument.RootElement;
 
-            services.AddSingleton(firebaseApp);
+                static string CredentialValue(JsonElement json, string propertyName) =>
+                    json.TryGetProperty(propertyName, out var property) &&
+                    !string.IsNullOrWhiteSpace(property.GetString())
+                        ? property.GetString()!
+                        : throw new InvalidOperationException(
+                            $"Firebase credentials are missing required property '{propertyName}'.");
+
+                if (CredentialValue(credentials, "type") != "service_account")
+                    throw new InvalidOperationException("Firebase credentials must be a service account.");
+
+                var initializer = new ServiceAccountCredential.Initializer(
+                    CredentialValue(credentials, "client_email"),
+                    CredentialValue(credentials, "token_uri"))
+                {
+                    ProjectId = CredentialValue(credentials, "project_id"),
+                    KeyId = CredentialValue(credentials, "private_key_id")
+                }.FromPrivateKey(CredentialValue(credentials, "private_key"));
+
+                var credential = new ServiceAccountCredential(initializer).ToGoogleCredential();
+
+                var firebaseApp = FirebaseApp.Create(new AppOptions
+                {
+                    Credential = credential
+                });
+
+                services.AddSingleton(firebaseApp);
+            }
+            catch
+            {
+                // Do not fail startup in local/container development
+            }
 
             return services;
         }

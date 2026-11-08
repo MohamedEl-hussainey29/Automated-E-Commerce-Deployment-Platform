@@ -52,6 +52,14 @@ namespace ApiGateway.Configuration
                 Match = new RouteMatch { Path = "/api/orders/{**catch-all}" },
                 RateLimiterPolicy = DefaultPolicy,
                 Transforms = [new Dictionary<string, string> { ["PathRemovePrefix"] = "/api/orders" }]
+            },
+            new RouteConfig
+            {
+                RouteId = "orders-root-route",
+                ClusterId = "orders-cluster",
+                Match = new RouteMatch { Path = "/api/orders" },
+                RateLimiterPolicy = DefaultPolicy,
+                Transforms = [new Dictionary<string, string> { ["PathSet"] = "/" }]
             }
         ];
 

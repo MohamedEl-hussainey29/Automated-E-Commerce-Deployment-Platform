@@ -189,6 +189,11 @@ export const CatalogPage: React.FC = () => {
             onClick={() => {
               setCategoryId('');
               setPage(1);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('categoryId');
+                return next;
+              });
             }}
             className="relative h-[40px] flex items-center justify-center shrink-0 px-1 cursor-pointer"
           >
@@ -208,15 +213,19 @@ export const CatalogPage: React.FC = () => {
 
           {categoryTabs.map((cat) => {
             const active = categoryId === cat.id;
-            const isReal = categories.length > 0;
             return (
               <button
                 key={cat.id}
                 onClick={() => {
-                  if (isReal) {
-                    setCategoryId(active ? '' : cat.id);
-                    setPage(1);
-                  }
+                  const newCatId = active ? '' : cat.id;
+                  setCategoryId(newCatId);
+                  setPage(1);
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    if (newCatId) next.set('categoryId', newCatId);
+                    else next.delete('categoryId');
+                    return next;
+                  });
                 }}
                 className="relative h-[40px] flex items-center justify-center shrink-0 px-1 cursor-pointer"
               >

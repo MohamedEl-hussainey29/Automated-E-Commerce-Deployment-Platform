@@ -25,7 +25,7 @@ export const AuthPage: React.FC = () => {
   // Register state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('+2010');
+  const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<0 | 1>(1);
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -81,13 +81,23 @@ export const AuthPage: React.FC = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = phone.replace(/^(\+?20)/, '').replace(/[\s-]/g, '');
+    if (!/^01[0125][0-9]{8}$/.test(cleanPhone)) {
+      toast(
+        'Invalid Mobile Number',
+        'Please enter a valid 11-digit Egyptian phone number without +20 (e.g. 01012345678)',
+        'error'
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await api.registerCustomer({
         firstName,
         lastName,
         email,
-        phone,
+        phone: cleanPhone,
         gender,
         password,
         confirmPassword,
@@ -423,7 +433,7 @@ export const AuthPage: React.FC = () => {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter phone number"
+                placeholder="01012345678"
                 className="w-full h-[56px] px-4 rounded-[4px] border border-[#535353] bg-[#F9F9F9] text-[14px] text-[#0C1015] placeholder:text-[#A6A6A6] focus:outline-none focus:border-[#D21E6A]"
               />
             </div>

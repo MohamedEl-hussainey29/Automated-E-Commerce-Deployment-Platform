@@ -161,7 +161,7 @@ export const CartCheckoutPage: React.FC = () => {
     if (!/^01[0125][0-9]{8}$/.test(normalizedPhone)) {
       toast(
         'Invalid Mobile',
-        'Please enter a valid 11-digit Egyptian phone number starting with 01 (e.g. 01012345678)',
+        'Please enter a valid 11-digit Egyptian phone number without +20 (e.g. 01012345678)',
         'error'
       );
       return;

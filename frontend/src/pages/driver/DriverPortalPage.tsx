@@ -59,7 +59,7 @@ export const DriverPortalPage: React.FC = () => {
   const [appFirstName, setAppFirstName] = useState('');
   const [appLastName, setAppLastName] = useState('');
   const [appEmail, setAppEmail] = useState('');
-  const [appPhone, setAppPhone] = useState('+2010');
+  const [appPhone, setAppPhone] = useState('');
   const [appGender, setAppGender] = useState('Male');
   const [appPlate, setAppPlate] = useState('');
   const [appVehicleTypeId, setAppVehicleTypeId] = useState('');
@@ -178,13 +178,23 @@ export const DriverPortalPage: React.FC = () => {
 
   const handleApplyDriver = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = appPhone.replace(/^(\+?20)/, '').replace(/[\s-]/g, '');
+    if (!/^01[0125][0-9]{8}$/.test(cleanPhone)) {
+      toast(
+        'Invalid Mobile Number',
+        'Please enter a valid 11-digit Egyptian phone number without +20 (e.g. 01012345678)',
+        'error'
+      );
+      return;
+    }
+
     setSubmittingApp(true);
     try {
       const fd = new FormData();
       fd.append('FirstName', appFirstName);
       fd.append('LastName', appLastName);
       fd.append('Email', appEmail);
-      fd.append('Phone', appPhone);
+      fd.append('Phone', cleanPhone);
       fd.append('Gender', appGender);
       fd.append('VehiclePlateNumber', appPlate);
       fd.append('VehicleTypeId', appVehicleTypeId);
@@ -963,7 +973,7 @@ export const DriverPortalPage: React.FC = () => {
                   required
                   value={appPhone}
                   onChange={(e) => setAppPhone(e.target.value)}
-                  placeholder="Enter phone number"
+                  placeholder="01012345678"
                   className="w-full h-[56px] px-4 rounded-[4px] border border-[#535353] bg-[#F9F9F9] text-[14px] text-[#0C1015]"
                 />
               </div>

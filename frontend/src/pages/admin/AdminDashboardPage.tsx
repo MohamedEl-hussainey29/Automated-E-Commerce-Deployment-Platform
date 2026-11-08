@@ -72,7 +72,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [stores, setStores] = useState<StoreDto[]>([]);
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
-  const [storePhone, setStorePhone] = useState('+201001122334');
+  const [storePhone, setStorePhone] = useState('01001122334');
   const [storeLat, setStoreLat] = useState('30.0561');
   const [storeLng, setStoreLng] = useState('31.3452');
   const [coverageType, setCoverageType] = useState<CoverageAreaType>('RADIUS');
