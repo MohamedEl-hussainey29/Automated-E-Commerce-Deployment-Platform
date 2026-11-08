@@ -309,13 +309,12 @@ export const HomePage: React.FC = () => {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {displayOccasions.slice(0, 4).map((occ, idx) => {
-              const isRealOcc = occasions.length > 0;
               const IconComponent = getCategoryReadyIcon(occ.name, idx);
               return (
                 <button
                   key={occ.id}
                   onClick={() =>
-                    navigate(isRealOcc ? `/catalog?occasionId=${occ.id}` : '/catalog')
+                    navigate(`/catalog?occasionId=${occ.id}`)
                   }
                   className="flex flex-col items-start gap-[8px] text-left group focus:outline-none cursor-pointer"
                 >

@@ -22,6 +22,45 @@ import { useToast } from '../context/ToastContext';
 import { api } from '../services/api';
 import type { AddressDto } from '../types/api';
 
+interface AppNotification {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  read: boolean;
+  type: 'order' | 'promo' | 'system';
+  link?: string;
+}
+
+const INITIAL_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'notif-1',
+    title: 'Order Tracking Update 🌸',
+    description: 'Your fresh floral arrangement order is being prepared by our florist hub.',
+    time: '15m ago',
+    read: false,
+    type: 'order',
+    link: '/orders',
+  },
+  {
+    id: 'notif-2',
+    title: 'Special Floral Offer',
+    description: 'Enjoy 15% off on all luxury Tulip & Rose hand bouquets this weekend!',
+    time: '2h ago',
+    read: false,
+    type: 'promo',
+    link: '/catalog',
+  },
+  {
+    id: 'notif-3',
+    title: 'Freshness Guarantee Care Tip',
+    description: 'Trim flower stems at a 45° angle and change vase water every 2 days.',
+    time: '1d ago',
+    read: true,
+    type: 'system',
+  },
+];
+
 export const Navbar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -40,6 +79,19 @@ export const Navbar: React.FC = () => {
   const [userAddresses, setUserAddresses] = useState<AddressDto[]>([]);
   const [resolvingStore, setResolvingStore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const unreadNotifCount = notifications.filter((n) => !n.read).length;
+
+  const markAllNotifsAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const markNotifAsRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+  };
 
   useEffect(() => {
     if (isAuthenticated && isCustomer) {
@@ -201,18 +253,106 @@ export const Navbar: React.FC = () => {
 
             {/* Right Actions */}
             <div className="flex items-center gap-3 shrink-0">
-              <Link
-                to="/orders"
-                title="Notifications"
-                className="relative p-1.5 text-[#0C1015] hover:text-[#D21E6A] transition-colors"
-              >
-                <Bell className="w-5 h-5" />
-                {(cart?.totalQuantity || 0) > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#CC1010] text-[#F9F9F9] text-[10px] font-medium flex items-center justify-center">
-                    {cart?.totalQuantity}
-                  </span>
+              {/* Notification Popover Button (Never navigates to /orders) */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen((v) => !v)}
+                  title="Notifications"
+                  className="relative p-1.5 text-[#0C1015] hover:text-[#D21E6A] transition-colors cursor-pointer"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#D21E6A] text-[#F9F9F9] text-[10px] font-medium flex items-center justify-center">
+                      {unreadNotifCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications Dropdown Panel */}
+                {notificationsOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-[16px] shadow-2xl border border-[#CFCFCF] z-50 overflow-hidden animate-in fade-in duration-150">
+                    <div className="px-4 py-3 bg-[#F9F9F9] border-b border-[#EBEBEB] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[15px] font-semibold text-[#0C1015]">Notifications</h3>
+                        {unreadNotifCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#F9ECF0] text-[#D21E6A] text-[11px] font-medium">
+                            {unreadNotifCount} new
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {unreadNotifCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllNotifsAsRead}
+                            className="text-[11px] text-[#D21E6A] hover:underline cursor-pointer font-medium"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setNotificationsOpen(false)}
+                          className="p-1 text-[#535353] hover:text-[#0C1015] cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto divide-y divide-[#F0F0F0]">
+                      {notifications.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-[#535353]">
+                          No notifications at the moment.
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div
+                            key={notif.id}
+                            onClick={() => {
+                              markNotifAsRead(notif.id);
+                              if (notif.link) {
+                                setNotificationsOpen(false);
+                                navigate(notif.link);
+                              }
+                            }}
+                            className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer ${
+                              notif.read ? 'bg-white hover:bg-[#F9F9F9]' : 'bg-[#F9ECF0]/40 hover:bg-[#F9ECF0]/70'
+                            }`}
+                          >
+                            <span className="w-8 h-8 rounded-full bg-[#F9ECF0] text-[#D21E6A] flex items-center justify-center shrink-0 mt-0.5">
+                              {notif.type === 'order' ? (
+                                <Truck className="w-4 h-4" />
+                              ) : notif.type === 'promo' ? (
+                                <Flower2 className="w-4 h-4" />
+                              ) : (
+                                <Bell className="w-4 h-4" />
+                              )}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className="text-xs font-semibold text-[#0C1015] truncate">
+                                  {notif.title}
+                                </p>
+                                <span className="text-[10px] text-[#A6A6A6] shrink-0">
+                                  {notif.time}
+                                </span>
+                              </div>
+                              <p className="text-xs text-[#535353] line-clamp-2 mt-0.5">
+                                {notif.description}
+                              </p>
+                            </div>
+                            {!notif.read && (
+                              <span className="w-2 h-2 rounded-full bg-[#D21E6A] shrink-0 mt-2" />
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 )}
-              </Link>
+              </div>
 
               <Link
                 to="/cart"

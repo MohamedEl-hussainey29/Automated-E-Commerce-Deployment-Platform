@@ -42,6 +42,15 @@ export const CatalogPage: React.FC = () => {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   useEffect(() => {
+    const cat = searchParams.get('categoryId') || '';
+    const occ = searchParams.get('occasionId') || '';
+    const q = searchParams.get('q') || '';
+    setCategoryId(cat);
+    setOccasionId(occ);
+    setSearchQuery(q);
+  }, [searchParams]);
+
+  useEffect(() => {
     api
       .getCategories(1, 50)
       .then((res) => {
@@ -113,6 +122,17 @@ export const CatalogPage: React.FC = () => {
     setPage(1);
     setSearchParams({});
   };
+
+  // Fallback occasions matching Flowery mobile design
+  const fallbackOccasions: OccasionDto[] = [
+    { id: 'wedding', name: 'Wedding', imageUrl: null, isActive: true, createdAt: '', updatedAt: '' },
+    { id: 'birthday', name: 'Birthday', imageUrl: null, isActive: true, createdAt: '', updatedAt: '' },
+    { id: 'anniversary', name: 'Anniversary', imageUrl: null, isActive: true, createdAt: '', updatedAt: '' },
+    { id: 'congratulations', name: 'Congratulations', imageUrl: null, isActive: true, createdAt: '', updatedAt: '' },
+    { id: 'love-romance', name: 'Love & Romance', imageUrl: null, isActive: true, createdAt: '', updatedAt: '' },
+  ];
+
+  const displayOccasions = occasions.length > 0 ? occasions : fallbackOccasions;
 
   // Fallback tabs matching Figma node 19:2212 if backend has no categories yet
   const categoryTabs =
@@ -218,40 +238,55 @@ export const CatalogPage: React.FC = () => {
         </div>
 
         {/* Occasion Sub-filter Pills (matching Figma Occasion screen 20:2788) */}
-        {occasions.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs font-medium text-[#535353] mr-1 shrink-0">Occasion:</span>
-            <button
-              onClick={() => {
-                setOccasionId('');
-                setPage(1);
-              }}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 ${
-                occasionId === ''
-                  ? 'bg-[#D21E6A] text-[#F9F9F9]'
-                  : 'bg-[#F9ECF0] text-[#535353] hover:text-[#D21E6A]'
-              }`}
-            >
-              All Occasions
-            </button>
-            {occasions.map((occ) => (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <span className="text-xs font-medium text-[#535353] mr-1 shrink-0">Occasion:</span>
+          <button
+            type="button"
+            onClick={() => {
+              setOccasionId('');
+              setPage(1);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('occasionId');
+                return next;
+              });
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 cursor-pointer ${
+              occasionId === ''
+                ? 'bg-[#D21E6A] text-[#F9F9F9] shadow-xs'
+                : 'bg-[#F9ECF0] text-[#535353] hover:text-[#D21E6A]'
+            }`}
+          >
+            All Occasions
+          </button>
+          {displayOccasions.map((occ) => {
+            const active = occasionId === occ.id;
+            return (
               <button
                 key={occ.id}
+                type="button"
                 onClick={() => {
-                  setOccasionId(occasionId === occ.id ? '' : occ.id);
+                  const newOccId = active ? '' : occ.id;
+                  setOccasionId(newOccId);
                   setPage(1);
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    if (newOccId) next.set('occasionId', newOccId);
+                    else next.delete('occasionId');
+                    return next;
+                  });
                 }}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 ${
-                  occasionId === occ.id
-                    ? 'bg-[#D21E6A] text-[#F9F9F9]'
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 cursor-pointer ${
+                  active
+                    ? 'bg-[#D21E6A] text-[#F9F9F9] shadow-xs'
                     : 'bg-[#F9ECF0] text-[#535353] hover:text-[#D21E6A]'
                 }`}
               >
                 {occ.name}
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
 
         {/* Error Banner */}
         {error && (

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
+  User,
   ChevronLeft,
   ChevronRight,
   Camera,
@@ -24,10 +25,61 @@ import type {
   SessionDto,
 } from '../../types/api';
 
+const DEFAULT_GOVERNORATES = [
+  { id: 1, nameEn: 'Cairo', nameAr: 'القاهرة' },
+  { id: 2, nameEn: 'Giza', nameAr: 'الجيزة' },
+  { id: 3, nameEn: 'Alexandria', nameAr: 'الإسكندرية' },
+];
+
+const DEFAULT_CITIES: Record<number, { id: number; nameEn: string; nameAr: string }[]> = {
+  1: [
+    { id: 1, nameEn: 'Nasr City', nameAr: 'مدينة نصر' },
+    { id: 2, nameEn: 'New Cairo', nameAr: 'القاهرة الجديدة' },
+    { id: 3, nameEn: 'Maadi', nameAr: 'المعادي' },
+    { id: 4, nameEn: 'Heliopolis', nameAr: 'مصر الجديدة' },
+    { id: 5, nameEn: 'Zamalek', nameAr: 'الزمالك' },
+  ],
+  2: [
+    { id: 6, nameEn: 'Dokki', nameAr: 'الدقي' },
+    { id: 7, nameEn: 'Mohandessin', nameAr: 'المهندسين' },
+    { id: 8, nameEn: 'Sheikh Zayed', nameAr: 'الشيخ زايد' },
+    { id: 9, nameEn: '6th of October', nameAr: 'السادس من أكتوبر' },
+  ],
+  3: [
+    { id: 10, nameEn: 'Sidi Gaber', nameAr: 'سيدي جابر' },
+    { id: 11, nameEn: 'Smouha', nameAr: 'سموحة' },
+    { id: 12, nameEn: 'Gleem', nameAr: 'جليم' },
+  ],
+};
+
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, setSession, logout } = useAuth();
   const { toast } = useToast();
+
+  const handleQuickCustomerLogin = async () => {
+    setLoading(true);
+    try {
+      const reg = await api.registerCustomer({
+        firstName: 'Test',
+        lastName: 'Customer',
+        email: `customer_${Date.now()}@floweapp.com`,
+        phone: '01012345678',
+        gender: 1,
+        password: 'Password@123!',
+        confirmPassword: 'Password@123!',
+      });
+      if (reg.data) {
+        setSession(reg.data.user, reg.data.token);
+        toast('Logged In', 'Welcome to your Flowery profile');
+      }
+    } catch (err: any) {
+      toast('Login Notice', err.message || 'Please log in with your credentials', 'info');
+      navigate('/auth?redirect=/profile');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'addresses' | 'security'>(
     'overview'
@@ -188,15 +240,36 @@ export const ProfilePage: React.FC = () => {
 
   const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      toast('Authentication Required', 'Please sign in to save your delivery address', 'info');
+      navigate('/auth?redirect=/profile');
+      return;
+    }
+
+    const cleanPhone = recipientPhone.replace(/[\s\-\+]/g, '');
+    const normalizedPhone = cleanPhone.startsWith('20') ? cleanPhone.slice(2) : cleanPhone;
+    if (!/^01[0125][0-9]{8}$/.test(normalizedPhone)) {
+      toast(
+        'Invalid Mobile Number',
+        'Please enter a valid 11-digit Egyptian mobile number (e.g. 01012345678)',
+        'error'
+      );
+      return;
+    }
+    if (!addressLine.trim()) {
+      toast('Address Required', 'Please enter your street address / building info', 'error');
+      return;
+    }
+
     const payload = {
-      recipientName,
-      recipientPhone,
-      addressLine,
-      governorateId,
-      cityId,
-      area,
-      lat: parseFloat(lat),
-      lng: parseFloat(lng),
+      recipientName: recipientName.trim() || 'Customer',
+      recipientPhone: normalizedPhone,
+      addressLine: addressLine.trim(),
+      governorateId: Number(governorateId) || 1,
+      cityId: Number(cityId) || 1,
+      area: area.trim() || 'Nasr City',
+      lat: parseFloat(lat) || 30.0561,
+      lng: parseFloat(lng) || 31.3452,
       label: label || 'Home',
     };
 
@@ -220,7 +293,7 @@ export const ProfilePage: React.FC = () => {
       setAddressLine('');
       setArea('');
     } catch (err: any) {
-      toast('Address Save Failed', err.message, 'error');
+      toast('Address Save Notice', err.message || 'Could not save address', 'error');
     }
   };
 
@@ -286,6 +359,37 @@ export const ProfilePage: React.FC = () => {
     `https://ui-avatars.com/api/?name=${encodeURIComponent(
       displayName
     )}&background=F9ECF0&color=D21E6A&size=160`;
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <div className="bg-white rounded-[16px] p-8 border-[0.5px] border-[#A6A6A6] space-y-5 shadow-sm">
+          <div className="w-16 h-16 rounded-full bg-[#F9ECF0] flex items-center justify-center mx-auto text-[#D21E6A]">
+            <User className="w-8 h-8" />
+          </div>
+          <h2 className="text-[20px] font-semibold text-[#0C1015]">Sign In Required</h2>
+          <p className="text-xs text-[#535353] leading-relaxed">
+            Please log in or register to manage your profile, saved addresses, and active orders.
+          </p>
+          <div className="space-y-3 pt-2">
+            <Link
+              to="/auth?redirect=/profile"
+              className="w-full h-[46px] rounded-[100px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-sm font-medium flex items-center justify-center transition-colors"
+            >
+              Sign In / Register
+            </Link>
+            <button
+              type="button"
+              onClick={handleQuickCustomerLogin}
+              className="w-full h-[46px] rounded-[100px] border border-[#D21E6A] text-[#D21E6A] hover:bg-[#F9ECF0] text-sm font-medium transition-colors cursor-pointer"
+            >
+              Quick Demo Customer Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 bg-[#F9F9F9] min-h-screen">
@@ -807,11 +911,11 @@ export const ProfilePage: React.FC = () => {
                       Governorate
                     </label>
                     <select
-                      value={governorateId}
+                      value={governorateId || 1}
                       onChange={(e) => setGovernorateId(Number(e.target.value))}
                       className="w-full h-[56px] px-4 rounded-[4px] border border-[#535353] bg-[#F9F9F9] text-[14px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
                     >
-                      {governorates.map((g) => (
+                      {(governorates.length > 0 ? governorates : DEFAULT_GOVERNORATES).map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.nameEn}
                         </option>
@@ -824,11 +928,14 @@ export const ProfilePage: React.FC = () => {
                       City
                     </label>
                     <select
-                      value={cityId}
+                      value={cityId || 1}
                       onChange={(e) => setCityId(Number(e.target.value))}
                       className="w-full h-[56px] px-4 rounded-[4px] border border-[#535353] bg-[#F9F9F9] text-[14px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
                     >
-                      {cities.map((c) => (
+                      {(cities.length > 0
+                        ? cities
+                        : DEFAULT_CITIES[governorateId || 1] || DEFAULT_CITIES[1]
+                      ).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.nameEn}
                         </option>

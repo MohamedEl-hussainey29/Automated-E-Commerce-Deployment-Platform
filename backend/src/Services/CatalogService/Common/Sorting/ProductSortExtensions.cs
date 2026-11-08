@@ -28,7 +28,7 @@ namespace CatalogService.Common.Sorting
 
             if (occasionId.HasValue)
             {
-                query = query.Where(p => p.Occasions.Any(o => o.Id == occasionId.Value));
+                query = query.Where(p => p.ProductOccasions != null && p.ProductOccasions.Any(po => po.OccasionId == occasionId.Value));
             }
 
             return query;

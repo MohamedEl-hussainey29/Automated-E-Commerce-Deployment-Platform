@@ -9,6 +9,9 @@ import {
   AlertTriangle,
   ExternalLink,
   CheckCircle2,
+  MapPin,
+  X,
+  ShoppingBag,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useCart } from '../../context/CartContext';
@@ -21,10 +24,36 @@ import type {
   PaymentMethod,
 } from '../../types/api';
 
+const DEFAULT_GOVERNORATES = [
+  { id: 1, nameEn: 'Cairo', nameAr: 'القاهرة' },
+  { id: 2, nameEn: 'Giza', nameAr: 'الجيزة' },
+  { id: 3, nameEn: 'Alexandria', nameAr: 'الإسكندرية' },
+];
+
+const DEFAULT_CITIES: Record<number, { id: number; nameEn: string }[]> = {
+  1: [
+    { id: 1, nameEn: 'Nasr City' },
+    { id: 2, nameEn: 'New Cairo' },
+    { id: 3, nameEn: 'Maadi' },
+    { id: 4, nameEn: 'Heliopolis' },
+    { id: 5, nameEn: 'Zamalek' },
+  ],
+  2: [
+    { id: 6, nameEn: 'Dokki' },
+    { id: 7, nameEn: 'Mohandessin' },
+    { id: 8, nameEn: 'Sheikh Zayed' },
+    { id: 9, nameEn: '6th of October' },
+  ],
+  3: [
+    { id: 10, nameEn: 'Sidi Gaber' },
+    { id: 11, nameEn: 'Smouha' },
+  ],
+};
+
 export const CartCheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const { cart, refreshCart, updateQuantity, removeItem } = useCart();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated, setSession } = useAuth();
   const { toast } = useToast();
 
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'address' | 'payment'>('cart');
@@ -40,18 +69,35 @@ export const CartCheckoutPage: React.FC = () => {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [stripeSessionUrl, setStripeSessionUrl] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Inline Add Delivery Address Modal State
+  const [addAddressModalOpen, setAddAddressModalOpen] = useState(false);
+  const [newRecipientName, setNewRecipientName] = useState('');
+  const [newRecipientPhone, setNewRecipientPhone] = useState('');
+  const [newAddressLine, setNewAddressLine] = useState('');
+  const [newGovernorateId, setNewGovernorateId] = useState<number>(1);
+  const [newCityId, setNewCityId] = useState<number>(1);
+  const [newArea, setNewArea] = useState('Nasr City');
+  const [newLabel, setNewLabel] = useState('Home');
+  const [savingAddress, setSavingAddress] = useState(false);
+
+  const loadAddresses = async () => {
     if (!isAuthenticated) return;
-    refreshCart();
-    api
-      .getAddresses()
-      .then((res) => {
-        const list = res.data || [];
-        setAddresses(list);
-        const def = list.find((a) => a.isDefault) || list[0];
-        if (def) setSelectedAddressId(def.id);
-      })
-      .catch(() => setAddresses([]));
+    try {
+      const res = await api.getAddresses();
+      const list: AddressDto[] = res.data || [];
+      setAddresses(list);
+      const def = list.find((a: AddressDto) => a.isDefault) || list[0];
+      if (def && !selectedAddressId) setSelectedAddressId(def.id);
+    } catch {
+      setAddresses([]);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshCart();
+      loadAddresses();
+    }
   }, [isAuthenticated, refreshCart]);
 
   useEffect(() => {
@@ -82,15 +128,89 @@ export const CartCheckoutPage: React.FC = () => {
 
   const selectedAddressObj = addresses.find((a) => a.id === selectedAddressId);
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+  const handleQuickCustomerLogin = async () => {
+    try {
+      const reg = await api.registerCustomer({
+        firstName: 'Test',
+        lastName: 'Customer',
+        email: `customer_${Date.now()}@floweapp.com`,
+        phone: '01012345678',
+        gender: 1,
+        password: 'Password@123!',
+        confirmPassword: 'Password@123!',
+      });
+      if (reg.data) {
+        setSession(reg.data.user, reg.data.token);
+        toast('Logged in as Customer', 'Ready to complete checkout!');
+      }
+    } catch {
+      navigate('/auth?redirect=/cart');
+    }
+  };
+
+  const handleSaveNewAddress = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      toast('Authentication Required', 'Please sign in to save addresses', 'info');
+      navigate('/auth?redirect=/cart');
+      return;
+    }
+
+    const cleanPhone = newRecipientPhone.replace(/[\s\-\+]/g, '');
+    const normalizedPhone = cleanPhone.startsWith('20') ? cleanPhone.slice(2) : cleanPhone;
+    if (!/^01[0125][0-9]{8}$/.test(normalizedPhone)) {
+      toast(
+        'Invalid Mobile',
+        'Please enter a valid 11-digit Egyptian phone number starting with 01 (e.g. 01012345678)',
+        'error'
+      );
+      return;
+    }
+    if (!newAddressLine.trim()) {
+      toast('Address Required', 'Please enter your street / building info', 'error');
+      return;
+    }
+
+    setSavingAddress(true);
+    try {
+      const res = await api.createAddress({
+        recipientName: newRecipientName.trim() || user?.name || 'Customer',
+        recipientPhone: normalizedPhone,
+        addressLine: newAddressLine.trim(),
+        governorateId: Number(newGovernorateId) || 1,
+        cityId: Number(newCityId) || 1,
+        area: newArea.trim() || 'Nasr City',
+        lat: 30.0561,
+        lng: 31.3452,
+        label: newLabel || 'Home',
+      });
+      if (res.data) {
+        const added = res.data;
+        setAddresses((prev: AddressDto[]) => [added, ...prev.filter((a: AddressDto) => a.id !== added.id)]);
+        setSelectedAddressId(added.id);
+        setAddAddressModalOpen(false);
+        setNewAddressLine('');
+        toast('Address Saved', 'Delivery address selected for your order');
+      }
+    } catch (err: any) {
+      toast('Address Notice', err.message || 'Could not save address', 'error');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const handlePlaceOrder = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!cart || items.length === 0) return;
     if (!selectedAddressId) {
       toast('Select an Address', 'Please add or choose a delivery address first', 'error');
+      setCheckoutStep('address');
+      setAddAddressModalOpen(true);
       return;
     }
     if (isGift && (!giftRecipientName.trim() || !giftRecipientPhone.trim())) {
       toast('Gift Recipient Required', 'Please enter the recipient name and phone number', 'error');
+      setCheckoutStep('address');
       return;
     }
 
@@ -117,10 +237,7 @@ export const CartCheckoutPage: React.FC = () => {
       await refreshCart();
       if (res.data?.sessionUrl) {
         setStripeSessionUrl(res.data.sessionUrl);
-        toast(
-          'Stripe Checkout Created!',
-          'Order placed with PaymentService session URL ready'
-        );
+        toast('Stripe Checkout Created!', 'Order placed with PaymentService session URL ready');
       } else {
         toast('Your order placed successfully!', `Order ID: ${res.data?.orderId}`);
         navigate('/orders');
@@ -132,23 +249,59 @@ export const CartCheckoutPage: React.FC = () => {
     }
   };
 
+  const handleMainButtonClick = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (checkoutStep === 'cart') {
+      if (!isAuthenticated) {
+        navigate('/auth?redirect=/cart');
+        return;
+      }
+      setCheckoutStep('address');
+      if (addresses.length === 0) {
+        setAddAddressModalOpen(true);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (checkoutStep === 'address') {
+      if (!selectedAddressId) {
+        toast('Address Required', 'Please select or add a delivery address to continue', 'error');
+        setAddAddressModalOpen(true);
+        return;
+      }
+      setCheckoutStep('payment');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    handlePlaceOrder(e);
+  };
+
   if (!isAuthenticated) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <div className="bg-white rounded-[16px] p-8 border-[0.5px] border-[#A6A6A6] space-y-4">
-          <div className="w-16 h-16 rounded-full bg-[#F9ECF0] flex items-center justify-center mx-auto">
-            <img src="/figma/logo-flower.svg" alt="" className="w-8 h-8" />
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <div className="bg-white rounded-[16px] p-8 border-[0.5px] border-[#A6A6A6] space-y-5 shadow-sm">
+          <div className="w-16 h-16 rounded-full bg-[#F9ECF0] flex items-center justify-center mx-auto text-[#D21E6A]">
+            <ShoppingBag className="w-8 h-8" />
           </div>
-          <h2 className="text-[20px] font-medium text-[#0C1015]">Login to View Your Cart</h2>
-          <p className="text-xs text-[#535353]">
+          <h2 className="text-[20px] font-semibold text-[#0C1015]">Login to View Your Cart</h2>
+          <p className="text-xs text-[#535353] leading-relaxed">
             Please login or sign up to manage your flower basket and complete checkout.
           </p>
-          <Link
-            to="/auth"
-            className="inline-flex items-center justify-center w-full h-[48px] rounded-[100px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-[16px] font-medium transition-colors"
-          >
-            Login
-          </Link>
+          <div className="space-y-3 pt-2">
+            <Link
+              to="/auth?redirect=/cart"
+              className="inline-flex items-center justify-center w-full h-[48px] rounded-[100px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-[16px] font-medium transition-colors"
+            >
+              Login / Register
+            </Link>
+            <button
+              type="button"
+              onClick={handleQuickCustomerLogin}
+              className="w-full h-[46px] rounded-[100px] border border-[#D21E6A] text-[#D21E6A] hover:bg-[#F9ECF0] text-sm font-medium transition-colors cursor-pointer"
+            >
+              Quick Demo Customer Login
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -190,7 +343,7 @@ export const CartCheckoutPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-[#F9F9F9] min-h-screen pb-20">
+    <div className="bg-[#F9F9F9] min-h-screen pb-28">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* Figma Top Header ("Shipping details&back" node 81:2899 / 30:989 / 30:1061) */}
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -213,9 +366,9 @@ export const CartCheckoutPage: React.FC = () => {
                   <span className="text-[#535353]">({items.length} items)</span>
                 </>
               ) : checkoutStep === 'address' ? (
-                'Address'
+                'Shipping Address'
               ) : (
-                'Payment'
+                'Payment Method'
               )}
             </h1>
           </div>
@@ -226,7 +379,7 @@ export const CartCheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCheckoutStep('cart')}
-                className={`px-3 py-1 rounded-full font-medium transition-colors ${
+                className={`px-3 py-1 rounded-full font-medium transition-colors cursor-pointer ${
                   checkoutStep === 'cart'
                     ? 'bg-[#F9ECF0] text-[#D21E6A]'
                     : 'text-[#535353] hover:text-[#0C1015]'
@@ -237,7 +390,7 @@ export const CartCheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCheckoutStep('address')}
-                className={`px-3 py-1 rounded-full font-medium transition-colors ${
+                className={`px-3 py-1 rounded-full font-medium transition-colors cursor-pointer ${
                   checkoutStep === 'address'
                     ? 'bg-[#F9ECF0] text-[#D21E6A]'
                     : 'text-[#535353] hover:text-[#0C1015]'
@@ -248,7 +401,7 @@ export const CartCheckoutPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCheckoutStep('payment')}
-                className={`px-3 py-1 rounded-full font-medium transition-colors ${
+                className={`px-3 py-1 rounded-full font-medium transition-colors cursor-pointer ${
                   checkoutStep === 'payment'
                     ? 'bg-[#F9ECF0] text-[#D21E6A]'
                     : 'text-[#535353] hover:text-[#0C1015]'
@@ -263,11 +416,11 @@ export const CartCheckoutPage: React.FC = () => {
         {/* Figma "Deliver to" row on Cart screen (node 30:711) */}
         <div className="flex items-center gap-2 py-1">
           <img src="/figma/location-pin.svg" alt="Location" className="w-5 h-5 shrink-0" />
-          <span className="text-[16px] font-medium text-[#535353]">Deliver to</span>
-          <span className="text-[16px] font-medium text-[#0C1015] truncate max-w-[260px]">
+          <span className="text-[16px] font-medium text-[#535353]">Deliver to:</span>
+          <span className="text-[16px] font-medium text-[#0C1015] truncate max-w-[320px]">
             {selectedAddressObj
-              ? `${selectedAddressObj.addressLine} - ${selectedAddressObj.area}`
-              : '2XVP+XC - Sheikh Zayed.....'}
+              ? `${selectedAddressObj.addressLine} - ${selectedAddressObj.area || selectedAddressObj.cityName}`
+              : 'Add or select a delivery address'}
           </span>
           <ChevronDown className="w-5 h-5 text-[#0C1015] shrink-0" />
         </div>
@@ -318,7 +471,7 @@ export const CartCheckoutPage: React.FC = () => {
 
               {/* Step 3: Track order */}
               <Link to="/orders" className="flex flex-col items-center gap-1.5">
-                <div className="w-[40px] h-[40px] rounded-full border border-[#535353] text-[#535353] flex items-center justify-center text-[18px] font-medium">
+                <div className="w-[40px] h-[40px] rounded-full flex items-center justify-center text-[18px] font-medium border border-[#535353] text-[#535353]">
                   3
                 </div>
                 <span className="text-[12px] text-[#535353]">Track order</span>
@@ -328,24 +481,24 @@ export const CartCheckoutPage: React.FC = () => {
         )}
 
         {items.length === 0 ? (
-          <div className="bg-white rounded-[10px] p-14 text-center border-[0.5px] border-[#A6A6A6] space-y-4">
+          <div className="bg-white rounded-[16px] p-12 border-[0.5px] border-[#A6A6A6] text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-[#F9ECF0] flex items-center justify-center mx-auto">
-              <img src="/figma/cat-tulip.svg" alt="" className="w-8 h-8" />
+              <ShoppingBag className="w-8 h-8 text-[#D21E6A]" />
             </div>
-            <h2 className="text-[18px] font-medium text-[#0C1015]">Your Cart is Empty</h2>
+            <h2 className="text-[20px] font-medium text-[#0C1015]">Your cart is empty</h2>
             <p className="text-xs text-[#535353] max-w-sm mx-auto">
-              Browse our categories and occasions to add fresh flowers to your cart.
+              Discover our freshly cut flower bouquets, luxury vases, and gift arrangements.
             </p>
             <Link
               to="/catalog"
-              className="inline-flex items-center justify-center px-8 h-[48px] rounded-[100px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-[16px] font-medium transition-colors"
+              className="inline-flex items-center justify-center h-[44px] px-6 rounded-[20px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-sm font-medium transition-colors"
             >
-              Explore Categories
+              Explore Flowers
             </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Cart Items ("All cards" node 29:747) & Address Selection ("all address" node 230:3283) */}
+            {/* Left Column: Cart Items, Gift, and Addresses */}
             <div className="lg:col-span-7 space-y-6">
               {cart?.hasChanges && (
                 <div className="p-3.5 rounded-[8px] bg-[#F9ECF0] border border-[#D21E6A]/30 flex items-center gap-2.5 text-xs text-[#0C1015]">
@@ -363,7 +516,6 @@ export const CartCheckoutPage: React.FC = () => {
                     key={item.itemId}
                     className="border-[#535353] border-[0.5px] rounded-[8px] p-[8px] bg-[#F9F9F9] flex items-center gap-[12px]"
                   >
-                    {/* Left image box: bg-[#f9ecf0] h-[101px] w-[96px] rounded-[8px] */}
                     <Link
                       to={`/products/${item.productId}`}
                       className="bg-[#F9ECF0] h-[101px] w-[96px] rounded-[8px] px-[12px] py-[8px] flex items-center justify-center shrink-0 overflow-hidden"
@@ -379,7 +531,6 @@ export const CartCheckoutPage: React.FC = () => {
                       )}
                     </Link>
 
-                    {/* Right Card details (node 29:658) */}
                     <div className="flex-1 flex flex-col justify-between min-h-[84px]">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -409,7 +560,6 @@ export const CartCheckoutPage: React.FC = () => {
                           EGP {item.lineSubtotal.toFixed(0)}
                         </p>
 
-                        {/* Figma - 1 + controls (node 29:655) */}
                         <div className="flex items-center gap-[8px]">
                           <button
                             type="button"
@@ -435,7 +585,7 @@ export const CartCheckoutPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Figma "Gift info" section (node 81:2904: Switch + Name & Phone floating-label text fields) */}
+              {/* Figma "Gift info" section */}
               <div className="space-y-4 pt-2">
                 <div className="flex items-center gap-[10px]">
                   <button
@@ -454,32 +604,30 @@ export const CartCheckoutPage: React.FC = () => {
 
                 {isGift && (
                   <div className="space-y-5 pt-1">
-                    {/* Floating-label Outlined Input: Name (node 81:2970) */}
                     <div className="relative border border-[#535353] focus-within:border-[#D21E6A] rounded-[4px] h-[56px] px-4 flex items-center bg-[#F9F9F9]">
                       <label className="absolute -top-2.5 left-3 bg-[#F9F9F9] px-1 text-[12px] text-[#535353]">
-                        Name
+                        Recipient Name
                       </label>
                       <input
                         type="text"
                         required={isGift}
                         value={giftRecipientName}
                         onChange={(e) => setGiftRecipientName(e.target.value)}
-                        placeholder="Enter the name"
+                        placeholder="Enter the recipient name"
                         className="w-full bg-transparent text-[14px] text-[#0C1015] placeholder-[#A6A6A6] focus:outline-none"
                       />
                     </div>
 
-                    {/* Floating-label Outlined Input: Phone number (node 81:2979) */}
                     <div className="relative border border-[#535353] focus-within:border-[#D21E6A] rounded-[4px] h-[56px] px-4 flex items-center bg-[#F9F9F9]">
                       <label className="absolute -top-2.5 left-3 bg-[#F9F9F9] px-1 text-[12px] text-[#535353]">
-                        Phone number
+                        Recipient Phone (Egyptian Mobile)
                       </label>
                       <input
                         type="tel"
                         required={isGift}
                         value={giftRecipientPhone}
                         onChange={(e) => setGiftRecipientPhone(e.target.value)}
-                        placeholder="Enter the phone number"
+                        placeholder="e.g. 01012345678"
                         className="w-full bg-transparent text-[14px] text-[#0C1015] placeholder-[#A6A6A6] focus:outline-none"
                       />
                     </div>
@@ -487,55 +635,83 @@ export const CartCheckoutPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Figma "Deliver to" / "all address" section (node 30:1012 & 230:3283) */}
+              {/* Figma "Deliver to" / "all address" section */}
               <div className="space-y-4 pt-2">
-                <h2 className="text-[18px] font-medium text-[#0C1015]">Deliver to</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[18px] font-medium text-[#0C1015]">Deliver to</h2>
+                  <button
+                    type="button"
+                    onClick={() => setAddAddressModalOpen(true)}
+                    className="text-xs text-[#D21E6A] font-medium hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add New Address</span>
+                  </button>
+                </div>
 
                 <div className="space-y-3">
-                  {addresses.map((addr) => {
-                    const selected = selectedAddressId === addr.id;
-                    return (
-                      <div
-                        key={addr.id}
-                        onClick={() => setSelectedAddressId(addr.id)}
-                        className="bg-[#F9F9F9] shadow-[0px_0px_2px_rgba(83,83,83,0.25)] rounded-[10px] p-[16px] flex items-center justify-between cursor-pointer border border-transparent hover:border-[#D21E6A]/40 transition-all"
+                  {addresses.length === 0 ? (
+                    <div className="bg-[#F9F9F9] border border-dashed border-[#A6A6A6] rounded-[10px] p-6 text-center space-y-2">
+                      <p className="text-xs text-[#535353]">
+                        No saved delivery address found for your account.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setAddAddressModalOpen(true)}
+                        className="px-4 py-2 rounded-[100px] bg-[#D21E6A] text-[#F9F9F9] text-xs font-medium cursor-pointer"
                       >
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-[8px]">
-                            <span className="w-[20px] h-[20px] rounded-full border border-[#D21E6A] flex items-center justify-center shrink-0">
-                              {selected && (
-                                <span className="w-[12px] h-[12px] rounded-full bg-[#D21E6A]" />
-                              )}
-                            </span>
-                            <span className="text-[16px] font-medium text-[#0C1015]">
-                              {addr.label || 'Home'}
-                            </span>
-                          </div>
-                          <p className="text-[13px] font-normal text-[#535353] pl-7">
-                            {addr.addressLine} - {addr.area}, {addr.cityName}
-                          </p>
-                        </div>
-
-                        <Link
-                          to="/profile"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Edit address"
-                          className="p-1 text-[#535353] hover:text-[#D21E6A]"
+                        Add Delivery Address
+                      </button>
+                    </div>
+                  ) : (
+                    addresses.map((addr) => {
+                      const selected = selectedAddressId === addr.id;
+                      return (
+                        <div
+                          key={addr.id}
+                          onClick={() => setSelectedAddressId(addr.id)}
+                          className={`bg-[#F9F9F9] shadow-[0px_0px_2px_rgba(83,83,83,0.25)] rounded-[10px] p-[16px] flex items-center justify-between cursor-pointer border transition-all ${
+                            selected ? 'border-[#D21E6A] bg-[#F9ECF0]/30' : 'border-transparent hover:border-[#D21E6A]/40'
+                          }`}
                         >
-                          <img src="/figma/pen-edit.svg" alt="Edit" className="w-5 h-5" />
-                        </Link>
-                      </div>
-                    );
-                  })}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-[8px]">
+                              <span className="w-[20px] h-[20px] rounded-full border border-[#D21E6A] flex items-center justify-center shrink-0">
+                                {selected && (
+                                  <span className="w-[12px] h-[12px] rounded-full bg-[#D21E6A]" />
+                                )}
+                              </span>
+                              <span className="text-[16px] font-medium text-[#0C1015]">
+                                {addr.label || 'Home'}
+                              </span>
+                            </div>
+                            <p className="text-[13px] font-normal text-[#535353] pl-7">
+                              {addr.addressLine} - {addr.area}, {addr.cityName}
+                            </p>
+                          </div>
 
-                  {/* Figma "New address" button (node 230:3284) */}
-                  <Link
-                    to="/profile"
-                    className="border border-[#A6A6A6] hover:border-[#D21E6A] rounded-[20px] h-[36px] w-full flex items-center justify-center gap-1.5 text-[#D21E6A] text-[14px] font-medium transition-colors"
+                          <Link
+                            to="/profile"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Edit address"
+                            className="p-1 text-[#535353] hover:text-[#D21E6A]"
+                          >
+                            <img src="/figma/pen-edit.svg" alt="Edit" className="w-5 h-5" />
+                          </Link>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {/* Inline Add Address Trigger Button */}
+                  <button
+                    type="button"
+                    onClick={() => setAddAddressModalOpen(true)}
+                    className="border border-[#A6A6A6] hover:border-[#D21E6A] rounded-[20px] h-[36px] w-full flex items-center justify-center gap-1.5 text-[#D21E6A] text-[14px] font-medium transition-colors cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add new</span>
-                  </Link>
+                  </button>
                 </div>
 
                 {deliveryEstimate && (
@@ -560,13 +736,13 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Column: Figma "Payment" (node 238:2787), "Total price" (node 30:1215) & "Main Btn" (node 31:1228) */}
+            {/* Right Column: Payment, Summary & Checkout Action Button */}
             <div className="lg:col-span-5">
               <form
-                onSubmit={handlePlaceOrder}
+                onSubmit={handleMainButtonClick}
                 className="bg-white rounded-[12px] p-6 shadow-[0px_0px_2px_rgba(83,83,83,0.25)] space-y-6 sticky top-24"
               >
-                {/* Figma Payment method cards (node 238:2787) */}
+                {/* Figma Payment method cards */}
                 <div className="space-y-3">
                   <h2 className="text-[18px] font-medium text-[#0C1015]">Payment method</h2>
 
@@ -601,7 +777,7 @@ export const CartCheckoutPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Figma Total price breakdown (node 29:960 / 30:1215) */}
+                {/* Total price breakdown */}
                 <div className="space-y-3 pt-2">
                   <div className="space-y-2 text-[16px] font-normal text-[#535353]">
                     <div className="flex items-center justify-between">
@@ -622,16 +798,18 @@ export const CartCheckoutPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Figma Main Btn (node 30:731 Checkout / node 31:1228 Place order: bg-[#d21e6a] h-[50px] rounded-[20px]) */}
+                {/* Primary Action Button — Always visible and active for current step */}
                 <button
                   type="submit"
-                  disabled={placingOrder || !selectedAddressId}
-                  className="w-full h-[50px] rounded-[20px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-[18px] font-medium flex items-center justify-center transition-colors disabled:opacity-50 cursor-pointer"
+                  disabled={placingOrder || (checkoutStep === 'payment' && !selectedAddressId)}
+                  className="w-full h-[50px] rounded-[20px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-[18px] font-medium flex items-center justify-center transition-colors disabled:opacity-50 cursor-pointer shadow-md"
                 >
                   {placingOrder
                     ? 'Placing order...'
                     : checkoutStep === 'cart'
                     ? 'Checkout'
+                    : checkoutStep === 'address'
+                    ? 'Continue to Payment'
                     : 'Place order'}
                 </button>
               </form>
@@ -639,6 +817,180 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Figma Mobile Sticky Bottom Bar (node 30:731) — Guarantees checkout button is ALWAYS visible on phones/tablets */}
+      {items.length > 0 && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#CFCFCF] px-4 py-3 shadow-[0px_-4px_16px_rgba(0,0,0,0.08)] z-40 flex items-center justify-between gap-4">
+          <div>
+            <span className="text-[11px] text-[#535353] block font-normal">Total Price</span>
+            <span className="text-[18px] font-bold text-[#0C1015]">EGP {total.toFixed(0)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleMainButtonClick}
+            disabled={placingOrder || (checkoutStep === 'payment' && !selectedAddressId)}
+            className="flex-1 max-w-[220px] h-[48px] rounded-[20px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] text-[16px] font-medium flex items-center justify-center transition-colors disabled:opacity-50 cursor-pointer shadow-md"
+          >
+            {placingOrder
+              ? 'Placing...'
+              : checkoutStep === 'cart'
+              ? 'Checkout'
+              : checkoutStep === 'address'
+              ? 'Continue'
+              : 'Place order'}
+          </button>
+        </div>
+      )}
+
+      {/* Inline Add Address Modal */}
+      {addAddressModalOpen && (
+        <div className="fixed inset-0 z-50 bg-[#0C1015]/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#F9F9F9] rounded-[20px] max-w-md w-full p-6 shadow-2xl border border-[#CFCFCF] space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#CFCFCF]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-[#F9ECF0] text-[#D21E6A] flex items-center justify-center">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-semibold text-[#0C1015]">Add Delivery Address</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddAddressModalOpen(false)}
+                className="p-1 text-[#535353] hover:text-[#0C1015]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewAddress} className="space-y-4">
+              <div className="relative">
+                <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                  Street Address & Building
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAddressLine}
+                  onChange={(e) => setNewAddressLine(e.target.value)}
+                  placeholder="e.g. 10 Abbas El Akkad St, Apt 4"
+                  className="w-full h-[46px] px-3.5 rounded-[8px] border border-[#535353] bg-white text-[14px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                    Governorate
+                  </label>
+                  <select
+                    value={newGovernorateId}
+                    onChange={(e) => {
+                      const gid = Number(e.target.value);
+                      setNewGovernorateId(gid);
+                      const defaultCity = DEFAULT_CITIES[gid]?.[0]?.id || 1;
+                      setNewCityId(defaultCity);
+                    }}
+                    className="w-full h-[46px] px-3 rounded-[8px] border border-[#535353] bg-white text-[13px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                  >
+                    {DEFAULT_GOVERNORATES.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                    City / Zone
+                  </label>
+                  <select
+                    value={newCityId}
+                    onChange={(e) => setNewCityId(Number(e.target.value))}
+                    className="w-full h-[46px] px-3 rounded-[8px] border border-[#535353] bg-white text-[13px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                  >
+                    {(DEFAULT_CITIES[newGovernorateId] || DEFAULT_CITIES[1]).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                    Area / District
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newArea}
+                    onChange={(e) => setNewArea(e.target.value)}
+                    placeholder="e.g. Nasr City"
+                    className="w-full h-[46px] px-3 rounded-[8px] border border-[#535353] bg-white text-[13px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                    Label
+                  </label>
+                  <select
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    className="w-full h-[46px] px-3 rounded-[8px] border border-[#535353] bg-white text-[13px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                  >
+                    <option value="Home">Home</option>
+                    <option value="Work">Work</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                    Recipient Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newRecipientName}
+                    onChange={(e) => setNewRecipientName(e.target.value)}
+                    placeholder="e.g. Ahmed"
+                    className="w-full h-[46px] px-3 rounded-[8px] border border-[#535353] bg-white text-[13px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-medium text-[#535353] block mb-1">
+                    Recipient Mobile
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={newRecipientPhone}
+                    onChange={(e) => setNewRecipientPhone(e.target.value)}
+                    placeholder="010xxxxxxxx"
+                    className="w-full h-[46px] px-3 rounded-[8px] border border-[#535353] bg-white text-[13px] text-[#0C1015] focus:outline-none focus:border-[#D21E6A]"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={savingAddress}
+                  className="w-full h-[48px] rounded-[100px] bg-[#D21E6A] hover:bg-[#AF1958] text-[#F9F9F9] font-medium text-sm flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {savingAddress ? 'Saving Address...' : 'Save & Deliver Here'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

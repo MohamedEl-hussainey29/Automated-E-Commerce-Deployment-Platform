@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -9,6 +9,8 @@ type AuthMode = 'login' | 'register' | 'admin-login' | 'reset-password' | 'guest
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || '';
   const { setSession } = useAuth();
   const { toast } = useToast();
 
@@ -113,10 +115,46 @@ export const AuthPage: React.FC = () => {
         'Continuing as Guest',
         `Welcome ${guestVal?.userName || nameToUse}`
       );
-      navigate('/');
+      navigate(redirectUrl || '/');
     } catch (err: any) {
       // Even if backend guest endpoint fails or requires no auth, allow browsing storefront
-      navigate('/');
+      navigate(redirectUrl || '/');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickCustomerLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await api.login('customer@floweapp.com', 'Password@123!');
+      if (res.data) {
+        setSession(res.data.user, res.data.token, res.data.refreshToken);
+        toast('Welcome back!', 'Signed in as Customer');
+        navigate(redirectUrl || '/');
+        return;
+      }
+    } catch {
+      try {
+        const emailToUse = `customer_${Date.now().toString().slice(-6)}@floweapp.com`;
+        const reg = await api.registerCustomer({
+          firstName: 'Demo',
+          lastName: 'Customer',
+          email: emailToUse,
+          phone: '01012345678',
+          gender: 1,
+          password: 'Password@123!',
+          confirmPassword: 'Password@123!',
+        });
+        if (reg.data) {
+          setSession(reg.data.user, reg.data.token);
+          toast('Welcome to Flowery!', 'Created customer demo session');
+          navigate(redirectUrl || '/');
+          return;
+        }
+      } catch (err: any) {
+        toast('Login Failed', err.message, 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -264,9 +302,18 @@ export const AuthPage: React.FC = () => {
                 type="button"
                 onClick={() => handleCreateGuest()}
                 disabled={loading}
-                className="w-full h-[48px] rounded-[100px] border border-[#535353] bg-transparent hover:bg-[#F9ECF0]/50 text-[#535353] text-[16px] font-medium transition-colors"
+                className="w-full h-[48px] rounded-[100px] border border-[#535353] bg-transparent hover:bg-[#F9ECF0]/50 text-[#535353] text-[16px] font-medium transition-colors cursor-pointer"
               >
                 Continue as guest
+              </button>
+
+              <button
+                type="button"
+                onClick={handleQuickCustomerLogin}
+                disabled={loading}
+                className="w-full h-[48px] rounded-[100px] border border-[#D21E6A] bg-[#F9ECF0]/60 hover:bg-[#F9ECF0] text-[#D21E6A] text-[15px] font-medium transition-colors cursor-pointer"
+              >
+                Quick Demo Customer Login
               </button>
             </div>
 
